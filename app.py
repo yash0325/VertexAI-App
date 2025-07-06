@@ -1,15 +1,29 @@
 import streamlit as st
 import os
 import tempfile
+import json
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import FAISS  # Updated import
+from langchain_community.vectorstores import FAISS
 from vertexai import init as vertexai_init
 from dotenv import load_dotenv
-load_dotenv()
 
-# Streamlit page setup
+# -- Vertex AI authentication for Streamlit Community Cloud --
+from google.oauth2 import service_account
+
+# Load Google credentials from Streamlit secrets
+creds_dict = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+credentials = service_account.Credentials.from_service_account_info(creds_dict)
+
+PROJECT_ID = st.secrets["PROJECT_ID"]
+REGION = st.secrets["REGION"]
+
+# (Optional: If running locally, you can still load .env)
+if os.getenv("PROJECT_ID") is None:
+    load_dotenv()
+
+# ---- Streamlit page setup ----
 st.set_page_config(page_title="PDF Q&A (Vertex AI Gemini)", layout="wide")
 st.markdown(
     "<h1 style='text-align:center;'>📄 PDF Q&A Chatbot with Vertex AI Gemini</h1>"
@@ -19,7 +33,7 @@ st.markdown(
 
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
-# Function to load and split PDF
+# ---- Helper: Load and split PDF ----
 def load_and_split(file_path):
     loader = PyPDFLoader(file_path)
     docs = loader.load()
@@ -29,6 +43,7 @@ def load_and_split(file_path):
         split_docs.extend(splitter.create_documents([doc.page_content]))
     return split_docs
 
+# ---- Main App Logic ----
 if uploaded_file:
     temp_dir = tempfile.mkdtemp()
     file_path = os.path.join(temp_dir, uploaded_file.name)
@@ -36,10 +51,14 @@ if uploaded_file:
         f.write(uploaded_file.read())
     st.success("PDF uploaded successfully!")
 
-    # Build vectorstore with embeddings
+    # Build vectorstore with embeddings and Vertex AI auth
     @st.cache_resource(show_spinner=False)
     def build_vectorstore(path):
-        vertexai_init(project=os.getenv("PROJECT_ID"),location=os.getenv("REGION"))
+        vertexai_init(
+            project=PROJECT_ID,
+            location=REGION,
+            credentials=credentials,
+        )
         docs = load_and_split(path)
         embeddings = VertexAIEmbeddings(model_name="text-embedding-005")
         vectorstore = FAISS.from_documents(docs, embeddings)
