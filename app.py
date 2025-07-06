@@ -39,7 +39,7 @@ if uploaded_file:
     # Build vectorstore with embeddings
     @st.cache_resource(show_spinner=False)
     def build_vectorstore(path):
-        vertexai_init(project="myfirstproject-464916", location="us-central1")
+        vertexai_init(project=os.getenv("PROJECT_ID"),location=os.getenv("REGION"))
         docs = load_and_split(path)
         embeddings = VertexAIEmbeddings(model_name="text-embedding-005")
         vectorstore = FAISS.from_documents(docs, embeddings)
